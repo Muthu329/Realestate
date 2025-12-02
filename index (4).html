@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoEstate | AI-Powered Real Estate Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%); }
+        .gradient-text { background: linear-gradient(135deg, #3b82f6 0%, #10b981 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .glass-card { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); }
+        .property-card:hover { transform: translateY(-8px); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+        .chat-bubble-user { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+        .chat-bubble-ai { background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); }
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .slider::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; background: #3b82f6; border-radius: 50%; cursor: pointer; }
+        .typing-indicator span { animation: blink 1.4s infinite both; }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0%, 60%, 100% { opacity: 0.3; } 30% { opacity: 1; } }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+<!-- ============================================
+     CONFIGURATION & DATA LAYER
+     ============================================ -->
+<script>
+// ==============================================
+// MODE CONFIGURATION
+// ==============================================
+const MODE = "demo"; // Change to "live" for API calls
+const API_KEY = "your-api-key-here"; // For live mode only
+
+// ==============================================
+// DATABASE SCHEMA (JavaScript Implementation)
+// ==============================================
+/*
+DATABASE SCHEMA:
+
+TABLE: users
+- id: UUID PRIMARY KEY
+- email: VARCHAR(255) UNIQUE NOT NULL
+- password_hash: VARCHAR(255) NOT NULL
+- full_name: VARCHAR(100)
+- phone: VARCHAR(20)
+- user_type: ENUM('agent', 'broker', 'manager', 'individual')
+- company_name: VARCHAR(255)
+- created_at: TIMESTAMP DEFAULT NOW()
+- updated_at: TIMESTAMP
+
+TABLE: properties
+- id: UUID PRIMARY KEY
+- title: VARCHAR(255) NOT NULL
+- description: TEXT
+- price: DECIMAL(12,2) NOT NULL
+- property_type: ENUM('house', 'condo', 'apartment', 'townhouse')
+- bedrooms: INT
+- bathrooms: DECIMAL(3,1)
+- sqft: INT
+- address: VARCHAR(255)
+- city: VARCHAR(100)
+- state: VARCHAR(50)
+- zip_code: VARCHAR(10)
+- latitude: DECIMAL(10,8)
+- longitude: DECIMAL(11,8)
+- images: JSON
+- features: JSON
+- status: ENUM('active', 'pending', 'sold')
+- listed_by: UUID REFERENCES users(id)
+- created_at: TIMESTAMP DEFAULT NOW()
+
+TABLE: favorites
+- id: UUID PRIMARY KEY
+- user_id: UUID REFERENCES users(id)
+- property_id: UUID REFERENCES properties(id)
+- created_at: TIMESTAMP DEFAULT NOW()
+- UNIQUE(user_id, property_id)
+
+TABLE: lead_inquiries
+- id: UUID PRIMARY KEY
+- property_id: UUID REFERENCES properties(id)
+- name: VARCHAR(100) NOT NULL
+- email: VARCHAR(255) NOT NULL
+- phone: VARCHAR(20)
+- message: TEXT
+- inquiry_type: ENUM('general', 'showing', 'offer', 'question')
+- status: ENUM('new', 'contacted', 'qualified', 'closed')
+- created_at: TIMESTAMP DEFAULT NOW()
+
+TABLE: ai_interactions
+- id: UUID PRIMARY KEY
+- user_id: UUID REFERENCES users(id)
+- session_id: VARCHAR(100)
+- user_message: TEXT
+- ai_response: TEXT
+- mode: ENUM('demo', 'live')
+- recommended_properties: JSON
+- created_at: TIMESTAMP DEFAULT NOW()
+*/
+
+// ==============================================
+// SAMPLE PROPERTIES DATA
+// ==============================================
+const PROPERTIES = [
+    {
+        id: "prop-001",
+        title: "Modern Austin Oasis",
+        description: "Stunning contemporary home in the heart of Austin's most desirable neighborhood. This meticulously designed residence features floor-to-ceiling windows, an open-concept living area, and a chef's kitchen with premium appliances. The private backyard includes a heated pool and outdoor kitchen, perfect for Texas entertaining.",
+        price: 485000,
+        type: "house",
+        bedrooms: 3,
+        bathrooms: 2.5,
+        sqft: 2200,
+        address: "1847 Riverside Drive",
+        city: "Austin",
+        state: "TX",
+        zip: "78704",
+        image: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800",
+        features: ["Pool", "Smart Home", "Solar Panels", "2-Car Garage", "Updated Kitchen"],
+        status: "active",
+        yearBuilt: 2019
+    },
+    {
+        id: "prop-002",
+        title: "Denver Mountain View Estate",
+        description: "Breathtaking mountain views from every room in this luxury Denver home. Recently renovated with high-end finishes throughout, featuring a gourmet kitchen, spa-like master suite, and expansive deck for enjoying Colorado's stunning sunsets. Located in a top-rated school district.",
+        price: 725000,
+        type: "house",
+        bedrooms: 4,
+        bathrooms: 3,
+        sqft: 3100,
+        address: "892 Summit Ridge Lane",
+        city: "Denver",
+        state: "CO",
+        zip: "80220",
+        image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800",
+        features: ["Mountain Views", "Finished Basement", "Home Office", "Wine Cellar", "Fireplace"],
+        status: "active",
+        yearBuilt: 2017
+    },
+    {
+        id: "prop-003",
+        title: "Phoenix Desert Retreat",
+        description: "Experience desert living at its finest in this beautifully appointed Phoenix home. The open floor plan maximizes natural light while energy-efficient features keep costs low. Enjoy the resort-style backyard with a custom pool, fire pit, and mature desert landscaping.",
+        price: 395000,
+        type: "house",
+        bedrooms: 3,
+        bathrooms: 2,
+        sqft: 1850,
+        address: "4521 Saguaro Vista Way",
+        city: "Phoenix",
+        state: "AZ",
+        zip: "85028",
+        image: "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=800",
+        features: ["Pool", "Desert Landscaping", "Energy Efficient", "RV Parking", "Updated HVAC"],
+        status: "active",
+        yearBuilt: 2015
+    },
+    {
+        id: "prop-004",
+        title: "Seattle Urban Townhouse",
+        description: "Sophisticated urban living in Seattle's vibrant Capitol Hill neighborhood. This stunning townhouse offers three levels of modern design, rooftop deck with city views, and a private garage. Walk to restaurants, shops, and public transit.",
+        price: 650000,
+        type: "townhouse",
+        bedrooms: 2,
+        bathrooms: 2.5,
+        sqft: 1650,
+        address: "2103 Pine Street Unit B",
+        city: "Seattle",
+        state: "WA",
+        zip: "98122",
+        image: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800",
+        features: ["Rooftop Deck", "City Views", "Garage", "In-Unit Laundry", "Walk Score 95"],
+        status: "active",
+        yearBuilt: 2021
+    },
+    {
+        id: "prop-005",
+        title: "Miami Beachfront Condo",
+        description: "Wake up to ocean views in this luxurious Miami Beach condominium. This fully renovated unit features designer finishes, floor-to-ceiling windows, and a spacious balcony overlooking the Atlantic. Building amenities include pool, fitness center, and 24-hour concierge.",
+        price: 890000,
+        type: "condo",
+        bedrooms: 2,
+        bathrooms: 2,
+        sqft: 1400,
+        address: "1500 Ocean Drive #1205",
+        city: "Miami Beach",
+        state: "FL",
+        zip: "33139",
+        image: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800",
+        features: ["Ocean Views", "Concierge", "Pool", "Fitness Center", "Valet Parking"],
+        status: "active",
+        yearBuilt: 2018
+    },
+    {
+        id: "prop-006",
+        title: "Nashville Music Row Loft",
+        description: "Live like a star in this converted warehouse loft steps from Nashville's famous Music Row. Soaring 14-foot ceilings, exposed brick walls, and industrial-chic design create the perfect blend of history and modern comfort. Ideal for musicians or creative professionals.",
+        price: 425000,
+        type: "apartment",
+        bedrooms: 1,
+        bathrooms: 1,
+        sqft: 1100,
+        address: "1616 Division Street #402",
+        city: "Nashville",
+        state: "TN",
+        zip: "37203",
+        image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800",
+        features: ["High Ceilings", "Exposed Brick", "Recording Studio", "Rooftop Access", "Pet Friendly"],
+        status: "active",
+        yearBuilt: 1925
+    },
+    {
+        id: "prop-007",
+        title: "Charlotte Family Home",
+        description: "Perfect family home in Charlotte's sought-after Myers Park neighborhood. This charming residence offers generous living spaces, a newly renovated kitchen, and a beautiful backyard with mature trees. Walking distance to top-rated schools and parks.",
+        price: 545000,
+        type: "house",
+        bedrooms: 4,
+        bathrooms: 3,
+        sqft: 2800,
+        address: "3847 Queens Road",
+        city: "Charlotte",
+        state: "NC",
+        zip: "28209",
+        image: "https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800",
+        features: ["Large Yard", "Updated Kitchen", "Hardwood Floors", "Screened Porch", "Storage Shed"],
+        status: "active",
+        yearBuilt: 2008
+    },
+    {
+        id: "prop-008",
+        title: "San Diego Coastal Gem",
+        description: "California dreaming comes true in this stunning San Diego home just minutes from the beach. The light-filled interior features an open floor plan, chef's kitchen, and seamless indoor-outdoor living. Enjoy morning coffee on the patio with ocean breezes.",
+        price: 985000,
+        type: "house",
+        bedrooms: 3,
+        bathrooms: 2,
+        sqft: 1950,
+        address: "7234 Coast Boulevard",
+        city: "San Diego",
+        state: "CA",
+        zip: "92037",
+        image: "https://images.unsplash.com/photo-1600573472592-401b489a3cdc?w=800",
+        features: ["Near Beach", "Ocean Breezes", "Outdoor Living", "2-Car Garage", "Solar Ready"],
+        status: "active",
+        yearBuilt: 2020
+    },
+    {
+        id: "prop-009",
+        title: "Atlanta Historic Bungalow",
+        description: "Charming renovated bungalow in Atlanta's historic Grant Park neighborhood. Original hardwood floors and craftsman details blend seamlessly with modern updates including a gourmet kitchen and spa bathroom. Large lot with detached garage and garden space.",
+        price: 375000,
+        type: "house",
+        bedrooms: 2,
+        bathrooms: 2,
+        sqft: 1400,
+        address: "521 Confederate Avenue",
+        city: "Atlanta",
+        state: "GA",
+        zip: "30312",
+        image: "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=800",
+        features: ["Historic Character", "Renovated", "Large Lot", "Detached Garage", "Garden"],
+        status: "active",
+        yearBuilt: 1928
+    },
+    {
+        id: "prop-010",
+        title: "Portland Eco-Friendly Home",
+        description: "Sustainable living meets modern design in this LEED-certified Portland home. Features include solar panels, rainwater collection, native landscaping, and energy-efficient systems throughout. The open floor plan and abundant natural light create a healthy, inspiring living environment.",
+        price: 595000,
+        type: "house",
+        bedrooms: 3,
+        bathrooms: 2,
+        sqft: 2100,
+        address: "2847 Hawthorne Boulevard",
+        city: "Portland",
+        state: "OR",
+        zip: "97214",
+        image: "https://images.unsplash.com/photo-1600047509358-9dc75507daeb?w=800",
+        features: ["LEED Certified", "Solar Panels", "EV Charger", "Native Garden", "Smart Thermostat"],
+        status: "active",
+        yearBuilt: 2022
+    }
+];
+
+// ==============================================
+// DEMO AI RESPONSES LIBRARY
+// ==============================================
+const AI_RESPONSES = {
+    greeting: [
+        "Hello! I'm Echo, your AI property advisor. I'm here to help you find your perfect home. What are you looking for today?",
+        "Welcome to EchoEstate! I'm your personal AI assistant. Tell me about your dream home and I'll help you find it.",
+        "Hi there! Ready to find your next home? I can help you search by budget, location, features, or lifestyle. Where would you like to start?"
+    ],
+    budget_low: "Based on your budget under $400,000, I'd recommend exploring our properties in Atlanta, Phoenix, or Nashville. These markets offer excellent value with growing appreciation potential. Would you like to see some options?",
+    budget_mid: "With a budget of $400,000 to $700,000, you have great options in Austin, Charlotte, Denver, and Portland. These cities offer strong job markets and quality of life. What features are most important to you?",
+    budget_high: "Your budget opens doors to premium properties in San Diego, Seattle, and Miami Beach. These markets feature luxury finishes and prime locations. Are you interested in waterfront properties or urban living?",
+    family: "For families, I recommend looking at Charlotte's Myers Park or Denver's family-friendly neighborhoods. Both offer excellent schools, safe streets, and community amenities. Our 4-bedroom Charlotte home at $545,000 would be perfect!",
+    investment: "For investment properties, Austin and Nashville show strong rental demand and appreciation. The Austin Modern Oasis at $485,000 has excellent rental potential with an estimated monthly income of $2,800-$3,200.",
+    urban: "Love city living? Check out our Seattle townhouse with a walk score of 95, or the Nashville Music Row loft with its vibrant neighborhood. Both offer walkable lifestyles with great restaurants and entertainment nearby.",
+    outdoor: "For outdoor enthusiasts, I'd suggest Denver for mountain access or San Diego for beach lifestyle. Our Denver Mountain View Estate offers stunning Rockies views and quick access to skiing and hiking.",
+    default: "I'd be happy to help you explore that further. Based on your preferences, I can show you properties that match your criteria. Would you like me to filter our listings or provide more details about a specific area?",
+    recommendation: "Based on everything you've shared, I think the {property} would be an excellent match for you. It offers {features} at a competitive price point. Would you like to schedule a viewing or learn more about the neighborhood?",
+    closing: "I've noted your preferences and can set up alerts for new listings that match your criteria. Would you like me to save this search, or shall we explore any of these properties in more detail?"
+};
+
+// ==============================================
+// APPLICATION STATE
+// ==============================================
+let appState = {
+    currentPage: 'home',
+    user: JSON.parse(localStorage.getItem('echoUser')) || null,
+    favorites: JSON.parse(localStorage.getItem('echoFavorites')) || [],
+    filters: { minPrice: 0, maxPrice: 1000000, location: 'all', bedrooms: 'all' },
+    selectedProperty: null,
+    chatHistory: [],
+    chatContext: {}
+};
+
+// ==============================================
+// LOCATIONS LIST
+// ==============================================
+const LOCATIONS = [...new Set(PROPERTIES.map(p => p.city + ", " + p.state))];
+</script>
+
+<!-- ============================================
+     NAVIGATION
+     ============================================ -->
+<nav id="navbar" class="fixed w-full z-50 transition-all duration-300 bg-white/95 backdrop-blur-md shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-16">
+            <a href="#home" onclick="navigate('home')" class="flex items-center space-x-2">
+                <div class="w-10 h-10 rounded-lg gradient-bg flex items-center justify-center">
+                    <i class="fas fa-building text-white text-lg"></i>
+                </div>
+                <span class="text-xl font-bold text-gray-900">Echo<span class="text-blue-600">Estate</span></span>
+            </a>
+            
+            <div class="hidden md:flex items-center space-x-8">
+                <a href="#home" onclick="navigate('home')" class="text-gray-700 hover:text-blue-600 font-medium transition">Home</a>
+                <a href="#listings" onclick="navigate('listings')" class="text-gray-700 hover:text-blue-600 font-medium transition">Properties</a>
+                <a href="#ai-assistant" onclick="navigate('ai-assistant')" class="text-gray-700 hover:text-blue-600 font-medium transition">AI Assistant</a>
+                <a href="#contact" onclick="navigate('contact')" class="text-gray-700 hover:text-blue-600 font-medium transition">Contact</a>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <button onclick="navigate('favorites')" class="relative p-2 text-gray-600 hover:text-blue-600 transition">
+                    <i class="fas fa-heart text-lg"></i>
+                    <span id="favCount" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center hidden">0</span>
+                </button>
+                <button id="authBtn" onclick="toggleAuthModal()" class="bg-blue-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-blue-700 transition">
+                    Login
+                </button>
+                <button onclick="toggleMobileMenu()" class="md:hidden p-2 text-gray-600">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Mobile Menu -->
+    <div id="mobileMenu" class="hidden md:hidden bg-white border-t">
+        <div class="px-4 py-3 space-y-2">
+            <a href="#home" onclick="navigate('home'); toggleMobileMenu()" class="block py-2 text-gray-700">Home</a>
+            <a href="#listings" onclick="navigate('listings'); toggleMobileMenu()" class="block py-2 text-gray-700">Properties</a>
+            <a href="#ai-assistant" onclick="navigate('ai-assistant'); toggleMobileMenu()" class="block py-2 text-gray-700">AI Assistant</a>
+            <a href="#contact" onclick="navigate('contact'); toggleMobileMenu()" class="block py-2 text-gray-700">Contact</a>
+        </div>
+    </div>
+</nav>
+
+<!-- ============================================
+     HOME PAGE
+     ============================================ -->
+<section id="page-home" class="page">
+    <!-- Hero Section -->
+    <div class="relative min-h-screen gradient-bg overflow-hidden">
+        <div class="absolute inset-0 opacity-10">
+            <div class="absolute top-20 left-10 w-72 h-72 bg-blue-400 rounded-full filter blur-3xl"></div>
+            <div class="absolute bottom-20 right-10 w-96 h-96 bg-emerald-400 rounded-full filter blur-3xl"></div>
+        </div>
+        
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-20">
+            <div class="grid lg:grid-cols-2 gap-12 items-center">
+                <div class="text-white">
+                    <div class="inline-flex items-center bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full mb-6">
+                        <span class="w-2 h-2 bg-emerald-400 rounded-full mr-2 pulse-dot"></span>
+                        <span class="text-sm font-medium">AI-Powered Property Matching</span>
+                    </div>
+                    
+                    <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6">
+                        Find Your Perfect Home with
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">Intelligent Search</span>
+                    </h1>
+                    
+                    <p class="text-xl text-blue-100 mb-8 leading-relaxed">
+                        EchoEstate combines cutting-edge AI technology with comprehensive property listings to match you with homes that fit your lifestyle, budget, and dreams. Stop scrolling endlessly—let our AI find your perfect match.
+                    </p>
+                    
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <button onclick="navigate('listings')" class="bg-white text-blue-900 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-100 transition transform hover:scale-105 shadow-lg">
+                            <i class="fas fa-search mr-2"></i>Browse Listings
+                        </button>
+                        <button onclick="navigate('ai-assistant')" class="bg-gradient-to-r from-blue-500 to-emerald-500 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:opacity-90 transition transform hover:scale-105 shadow-lg">
+                            <i class="fas fa-robot mr-2"></i>Try AI Assistant
+                        </button>
+                    </div>
+                    
+                    <div class="mt-12 flex items-center space-x-8">
+                        <div>
+                            <div class="text-3xl font-bold">2,500+</div>
+                            <div class="text-blue-200 text-sm">Active Listings</div>
+                        </div>
+                        <div class="w-px h-12 bg-blue-400/30"></div>
+                        <div>
+                            <div class="text-3xl font-bold">98%</div>
+                            <div class="text-blue-200 text-sm">Client Satisfaction</div>
+                        </div>
+                        <div class="w-px h-12 bg-blue-400/30"></div>
+                        <div>
+                            <div class="text-3xl font-bold">48hr</div>
+                            <div class="text-blue-200 text-sm">Avg. Response Time</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="hidden lg:block">
+                    <div class="relative">
+                        <div class="absolute -top-4 -left-4 w-full h-full bg-gradient-to-br from-blue-400/20 to-emerald-400/20 rounded-3xl"></div>
+                        <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600" alt="Luxury Home" class="relative rounded-3xl shadow-2xl">
+                        
+                        <!-- Floating Card -->
+                        <div class="absolute -bottom-6 -left-6 bg-white rounded-2xl shadow-xl p-4 w-64">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-check text-emerald-600 text-xl"></i>
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-gray-900">AI Match Found!</div>
+                                    <div class="text-sm text-gray-500">3 homes match your criteria</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Search Section -->
+    <div class="bg-white py-8 -mt-12 relative z-10">
+        <div class="max-w-5xl mx-auto px-4">
+            <div class="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+                <div class="grid md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                        <select id="quickLocation" class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="all">All Locations</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Price Range</label>
+                        <select id="quickPrice" class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="all">Any Price</option>
+                            <option value="0-400000">Under $400k</option>
+                            <option value="400000-700000">$400k - $700k</option>
+                            <option value="700000-1000000">$700k+</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Bedrooms</label>
+                        <select id="quickBeds" class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="all">Any</option>
+                            <option value="1">1+</option>
+                            <option value="2">2+</option>
+                            <option value="3">3+</option>
+                            <option value="4">4+</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="quickSearch()" class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
+                            <i class="fas fa-search mr-2"></i>Search
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How It Works Section -->
+    <div class="py-20 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">How EchoEstate Works</h2>
+                <p class="text-xl text-gray-600 max-w-2xl mx-auto">Our AI-powered platform streamlines your home search from discovery to closing</p>
+            </div>
+            
+            <div class="grid md:grid-cols-4 gap-8">
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-comments text-blue-600 text-2xl"></i>
+                    </div>
+                    <div class="text-sm font-semibold text-blue-600 mb-2">STEP 1</div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Tell Us Your Needs</h3>
+                    <p class="text-gray-600">Chat with our AI assistant about your budget, preferred locations, and must-have features.</p>
+                </div>
+                
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-brain text-emerald-600 text-2xl"></i>
+                    </div>
+                    <div class="text-sm font-semibold text-emerald-600 mb-2">STEP 2</div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">AI Matches Properties</h3>
+                    <p class="text-gray-600">Our intelligent algorithm analyzes thousands of listings to find your perfect matches.</p>
+                </div>
+                
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-home text-purple-600 text-2xl"></i>
+                    </div>
+                    <div class="text-sm font-semibold text-purple-600 mb-2">STEP 3</div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Explore & Compare</h3>
+                    <p class="text-gray-600">Browse curated listings, save favorites, and compare properties side by side.</p>
+                </div>
+                
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-key text-orange-600 text-2xl"></i>
+                    </div>
+                    <div class="text-sm font-semibold text-orange-600 mb-2">STEP 4</div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Close with Confidence</h3>
+                    <p class="text-gray-600">Connect with agents, schedule viewings, and move into your dream home.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Featured Properties Section -->
+    <div class="py-20 bg-white">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-end mb-12">
+                <div>
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Featured Properties</h2>
+                    <p class="text-xl text-gray-600">Hand-picked homes recommended by our AI</p>
+                </div>
+                <a href="#listings" onclick="navigate('listings')" class="hidden md:flex items-center text-blue-600 font-semibold hover:text-blue-700">
+                    View All <i class="fas fa-arrow-right ml-2"></i>
+                </a>
+            </div>
+            
+            <div id="featuredProperties" class="grid md:grid-cols-3 gap-8">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Testimonials Section -->
+    <div class="py-20 bg-gradient-to-br from-blue-50 to-emerald-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Trusted by Real Estate Professionals</h2>
+                <p class="text-xl text-gray-600">See why agents and brokers choose EchoEstate</p>
+            </div>
+            
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-white rounded-2xl p-8 shadow-lg">
+                    <div class="flex items-center mb-4">
+                        <div class="text-yellow-400 flex">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                        </div>
+                    </div>
+                    <p class="text-gray-700 mb-6">"EchoEstate's AI assistant has transformed how I work with clients. It pre-qualifies leads and suggests properties that actually match what buyers want. My closing rate increased 40% in just three months."</p>
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">SM</div>
+                        <div class="ml-3">
+                            <div class="font-semibold text-gray-900">Sarah Mitchell</div>
+                            <div class="text-sm text-gray-500">Broker, Austin TX</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-2xl p-8 shadow-lg">
+                    <div class="flex items-center mb-4">
+                        <div class="text-yellow-400 flex">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                        </div>
+                    </div>
+                    <p class="text-gray-700 mb-6">"As a property manager handling 200+ units, EchoEstate streamlined our listing process. The AI-generated descriptions save hours of work, and the lead qualification is remarkably accurate."</p>
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 font-bold">JR</div>
+                        <div class="ml-3">
+                            <div class="font-semibold text-gray-900">James Rodriguez</div>
+                            <div class="text-sm text-gray-500">Property Manager, Denver CO</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-2xl p-8 shadow-lg">
+                    <div class="flex items-center mb-4">
+                        <div class="text-yellow-400 flex">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                        </div>
+                    </div>
+                    <p class="text-gray-700 mb-6">"My clients love the AI assistant—it's available 24/7 and answers questions I'd normally field at midnight. EchoEstate lets me focus on high-value activities while the platform handles discovery."</p>
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-bold">AL</div>
+                        <div class="ml-3">
+                            <div class="font-semibold text-gray-900">Amanda Lee</div>
+                            <div class="text-sm text-gray-500">Independent Agent, Seattle WA</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTA Section -->
+    <div class="py-20 gradient-bg">
+        <div class="max-w-4xl mx-auto px-4 text-center">
+            <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">Ready to Transform Your Real Estate Business?</h2>
+            <p class="text-xl text-blue-100 mb-8">Join thousands of real estate professionals using AI to close more deals faster.</p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button onclick="navigate('ai-assistant')" class="bg-white text-blue-900 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-100 transition">
+                    Try Demo Now
+                </button>
+                <button onclick="toggleAuthModal()" class="bg-transparent border-2 border-white text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-white/10 transition">
+                    Create Free Account
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     LISTINGS PAGE
+     ============================================ -->
+<section id="page-listings" class="page hidden pt-20">
+    <div class="bg-white border-b sticky top-16 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Property Listings</h1>
+                    <p class="text-gray-600" id="listingCount">Showing all properties</p>
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-4">
+                    <select id="filterLocation" onchange="applyFilters()" class="px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                        <option value="all">All Locations</option>
+                    </select>
+                    
+                    <select id="filterBeds" onchange="applyFilters()" class="px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                        <option value="all">All Bedrooms</option>
+                        <option value="1">1+ Beds</option>
+                        <option value="2">2+ Beds</option>
+                        <option value="3">3+ Beds</option>
+                        <option value="4">4+ Beds</option>
+                    </select>
+                    
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm text-gray-600">$<span id="priceDisplay">0</span>k - $1M</span>
+                        <input type="range" id="filterPrice" min="0" max="1000000" step="50000" value="0" onchange="applyFilters()" class="w-32 slider">
+                    </div>
+                    
+                    <select id="sortBy" onchange="applyFilters()" class="px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                        <option value="default">Sort By</option>
+                        <option value="price-low">Price: Low to High</option>
+                        <option value="price-high">Price: High to Low</option>
+                        <option value="beds">Bedrooms</option>
+                        <option value="sqft">Square Feet</option>
+                    </select>
+                    
+                    <button onclick="navigate('ai-assistant')" class="bg-gradient-to-r from-blue-600 to-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition">
+                        <i class="fas fa-robot mr-2"></i>Ask AI
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div id="propertyGrid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     PROPERTY DETAILS PAGE
+     ============================================ -->
+<section id="page-property" class="page hidden pt-20">
+    <div id="propertyDetails" class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Populated by JavaScript -->
+    </div>
+</section>
+
+<!-- ============================================
+     AI ASSISTANT PAGE
+     ============================================ -->
+<section id="page-ai-assistant" class="page hidden pt-20">
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <!-- Mode Indicator -->
+        <div class="mb-6 flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 mb-1">AI Property Finder</h1>
+                <p class="text-gray-600">Let our AI help you find your perfect home</p>
+            </div>
+            <div id="modeIndicator" class="flex items-center bg-emerald-100 text-emerald-800 px-4 py-2 rounded-full">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full mr-2 pulse-dot"></span>
+                <span class="font-medium text-sm">Demo Mode ON</span>
+            </div>
+        </div>
+        
+        <!-- Chat Container -->
+        <div class="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+            <!-- Chat Header -->
+            <div class="bg-gradient-to-r from-blue-600 to-emerald-600 px-6 py-4">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mr-3">
+                        <i class="fas fa-robot text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <div class="text-white font-semibold">Echo AI Assistant</div>
+                        <div class="text-blue-100 text-sm">Your personal property advisor</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Chat Messages -->
+            <div id="chatMessages" class="h-96 overflow-y-auto p-6 space-y-4">
+                <!-- Messages populated by JavaScript -->
+            </div>
+            
+            <!-- Starter Prompts -->
+            <div id="starterPrompts" class="px-6 pb-4">
+                <p class="text-sm text-gray-500 mb-3">Try asking:</p>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="sendStarterPrompt('I have a budget of $500,000. What can you recommend?')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-full text-sm transition">
+                        💰 Budget recommendations
+                    </button>
+                    <button onclick="sendStarterPrompt('I need a family-friendly home with good schools nearby')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-full text-sm transition">
+                        👨‍👩‍👧‍👦 Family homes
+                    </button>
+                    <button onclick="sendStarterPrompt('Show me properties good for investment')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-full text-sm transition">
+                        📈 Investment properties
+                    </button>
+                    <button onclick="sendStarterPrompt('I want to live in a walkable urban area')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-full text-sm transition">
+                        🏙️ Urban living
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Chat Input -->
+            <div class="border-t px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <input type="text" id="chatInput" placeholder="Ask about properties, neighborhoods, or your home search..." 
+                        class="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        onkeypress="if(event.key==='Enter')sendMessage()">
+                    <button onclick="sendMessage()" class="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     FAVORITES PAGE
+     ============================================ -->
+<section id="page-favorites" class="page hidden pt-20">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-gray-900 mb-2">Saved Properties</h1>
+            <p class="text-gray-600">Your favorite listings in one place</p>
+        </div>
+        
+        <div id="favoritesGrid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <!-- Populated by JavaScript -->
+        </div>
+        
+        <div id="noFavorites" class="hidden text-center py-20">
+            <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-heart text-gray-400 text-3xl"></i>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">No saved properties yet</h3>
+            <p class="text-gray-600 mb-6">Start exploring and save properties you love</p>
+            <button onclick="navigate('listings')" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition">
+                Browse Properties
+            </button>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     CONTACT PAGE
+     ============================================ -->
+<section id="page-contact" class="page hidden pt-20">
+    <div class="max-w-7xl mx-auto px-4 py-12">
+        <div class="grid lg:grid-cols-2 gap-12">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 mb-4">Get in Touch</h1>
+                <p class="text-xl text-gray-600 mb-8">Have questions about EchoEstate? Our team is here to help you succeed in your real estate journey.</p>
+                
+                <div class="space-y-6">
+                    <div class="flex items-start">
+                        <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mr-4">
+                            <i class="fas fa-envelope text-blue-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <div class="font-semibold text-gray-900">Email Us</div>
+                            <a href="mailto:muthurajp064@gmail.com" class="text-blue-600 hover:underline">muthurajp064@gmail.com</a>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-start">
+                        <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mr-4">
+                            <i class="fas fa-clock text-emerald-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <div class="font-semibold text-gray-900">Response Time</div>
+                            <div class="text-gray-600">We typically respond within 24 hours</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-start">
+                        <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mr-4">
+                            <i class="fas fa-headset text-purple-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <div class="font-semibold text-gray-900">Support Hours</div>
+                            <div class="text-gray-600">Monday - Friday: 9AM - 6PM EST</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-12 p-6 bg-blue-50 rounded-2xl">
+                    <h3 class="font-semibold text-gray-900 mb-2">Why Choose EchoEstate?</h3>
+                    <ul class="space-y-2 text-gray-700">
+                        <li class="flex items-center"><i class="fas fa-check text-blue-600 mr-2"></i>AI-powered property matching</li>
+                        <li class="flex items-center"><i class="fas fa-check text-blue-600 mr-2"></i>24/7 automated lead qualification</li>
+                        <li class="flex items-center"><i class="fas fa-check text-blue-600 mr-2"></i>Seamless integration with your workflow</li>
+                        <li class="flex items-center"><i class="fas fa-check text-blue-600 mr-2"></i>Dedicated support for real estate professionals</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+                <h2 class="text-2xl font-bold text-gray-900 mb-6">Send Us a Message</h2>
+                
+                <form id="contactForm" onsubmit="submitContactForm(event)" class="space-y-6">
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
+                            <input type="text" name="firstName" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
+                            <input type="text" name="lastName" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
+                        <input type="email" name="email" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                        <input type="tel" name="phone" class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">I am a...</label>
+                        <select name="userType" class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="agent">Real Estate Agent</option>
+                            <option value="broker">Broker</option>
+                            <option value="manager">Property Manager</option>
+                            <option value="individual">Home Buyer/Seller</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Message *</label>
+                        <textarea name="message" rows="4" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Tell us how we can help you..."></textarea>
+                    </div>
+                    
+                    <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold hover:bg-blue-700 transition">
+                        Send Message
+                    </button>
+                </form>
+                
+                <div id="contactSuccess" class="hidden text-center py-8">
+                    <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-check text-emerald-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-900 mb-2">Message Sent!</h3>
+                    <p class="text-gray-600">We'll get back to you within 24 hours.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     FOOTER
+     ============================================ -->
+<footer class="bg-gray-900 text-white py-12">
+    <div class="max-w-7xl mx-auto px-4">
+        <div class="grid md:grid-cols-4 gap-8 mb-8">
+            <div>
+                <div class="flex items-center space-x-2 mb-4">
+                    <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+                        <i class="fas fa-building text-white"></i>
+                    </div>
+                    <span class="text-xl font-bold">Echo<span class="text-blue-400">Estate</span></span>
+                </div>
+                <p class="text-gray-400 mb-4">AI-powered real estate platform for modern professionals.</p>
+                <div class="flex space-x-4">
+                    <a href="#" class="text-gray-400 hover:text-white transition"><i class="fab fa-linkedin text-xl"></i></a>
+                    <a href="#" class="text-gray-400 hover:text-white transition"><i class="fab fa-twitter text-xl"></i></a>
+                    <a href="#" class="text-gray-400 hover:text-white transition"><i class="fab fa-facebook text-xl"></i></a>
+                </div>
+            </div>
+            
+            <div>
+                <h4 class="font-semibold mb-4">Quick Links</h4>
+                <ul class="space-y-2">
+                    <li><a href="#home" onclick="navigate('home')" class="text-gray-400 hover:text-white transition">Home</a></li>
+                    <li><a href="#listings" onclick="navigate('listings')" class="text-gray-400 hover:text-white transition">Properties</a></li>
+                    <li><a href="#ai-assistant" onclick="navigate('ai-assistant')" class="text-gray-400 hover:text-white transition">AI Assistant</a></li>
+                    <li><a href="#contact" onclick="navigate('contact')" class="text-gray-400 hover:text-white transition">Contact</a></li>
+                </ul>
+            </div>
+            
+            <div>
+                <h4 class="font-semibold mb-4">For Professionals</h4>
+                <ul class="space-y-2">
+                    <li><a href="#" class="text-gray-400 hover:text-white transition">Agent Tools</a></li>
+                    <li><a href="#" class="text-gray-400 hover:text-white transition">Broker Solutions</a></li>
+                    <li><a href="#" class="text-gray-400 hover:text-white transition">Property Management</a></li>
+                    <li><a href="#" class="text-gray-400 hover:text-white transition">API Access</a></li>
+                </ul>
+            </div>
+            
+            <div>
+                <h4 class="font-semibold mb-4">Contact</h4>
+                <ul class="space-y-2">
+                    <li class="text-gray-400"><i class="fas fa-envelope mr-2"></i>muthurajp064@gmail.com</li>
+                    <li class="text-gray-400"><i class="fas fa-clock mr-2"></i>Mon-Fri 9AM-6PM EST</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
+            <p class="text-gray-400 text-sm">© 2024 EchoEstate. All rights reserved.</p>
+            <div class="flex space-x-6 mt-4 md:mt-0">
+                <a href="#" class="text-gray-400 hover:text-white text-sm transition">Privacy Policy</a>
+                <a href="#" class="text-gray-400 hover:text-white text-sm transition">Terms of Service</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- ============================================
+     AUTH MODAL
+     ============================================ -->
+<div id="authModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="toggleAuthModal()"></div>
+    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-md">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 m-4">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="authTitle" class="text-2xl font-bold text-gray-900">Welcome Back</h2>
+                <button onclick="toggleAuthModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <input type="email" name="email" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500" placeholder="you@example.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                    <input type="password" name="password" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
+                    Sign In
+                </button>
+                <p class="text-center text-gray-600">
+                    Don't have an account? 
+                    <button type="button" onclick="toggleAuthForm()" class="text-blue-600 font-medium hover:underline">Sign up</button>
+                </p>
+                
+                <div class="relative my-4">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-200"></div></div>
+                    <div class="relative flex justify-center text-sm"><span class="px-2 bg-white text-gray-500">Or continue with</span></div>
+                </div>
+                
+                <button type="button" onclick="demoLogin()" class="w-full border border-gray-200 py-3 rounded-lg font-medium hover:bg-gray-50 transition flex items-center justify-center">
+                    <i class="fas fa-play-circle text-blue-600 mr-2"></i>Demo Account
+                </button>
+            </form>
+            
+            <!-- Register Form -->
+            <form id="registerForm" onsubmit="handleRegister(event)" class="space-y-4 hidden">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+                        <input type="text" name="firstName" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+                        <input type="text" name="lastName" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <input type="email" name="email" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                    <input type="password" name="password" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">I am a...</label>
+                    <select name="userType" class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                        <option value="agent">Real Estate Agent</option>
+                        <option value="broker">Broker</option>
+                        <option value="manager">Property Manager</option>
+                        <option value="individual">Home Buyer/Seller</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
+                    Create Account
+                </button>
+                <p class="text-center text-gray-600">
+                    Already have an account? 
+                    <button type="button" onclick="toggleAuthForm()" class="text-blue-600 font-medium hover:underline">Sign in</button>
+                </p>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     JAVASCRIPT APPLICATION LOGIC
+     ============================================ -->
+<script>
+// ==============================================
+// NAVIGATION & ROUTING
+// ==============================================
+function navigate(page, data = null) {
+    document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+    document.getElementById(`page-${page}`).classList.remove('hidden');
+    appState.currentPage = page;
+    window.scrollTo(0, 0);
+    
+    if (page === 'property' && data) {
+        appState.selectedProperty = data;
+        renderPropertyDetails(data);
+    }
+    
+    if (page === 'listings') renderListings();
+    if (page === 'favorites') renderFavorites();
+    if (page === 'ai-assistant') initChat();
+    
+    window.location.hash = page;
+}
+
+function toggleMobileMenu() {
+    document.getElementById('mobileMenu').classList.toggle('hidden');
+}
+
+// ==============================================
+// PROPERTY RENDERING
+// ==============================================
+function renderPropertyCard(property, showRemove = false) {
+    const isFavorite = appState.favorites.includes(property.id);
+    return `
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden property-card transition-all duration-300 border border-gray-100">
+            <div class="relative">
+                <img src="${property.image}" alt="${property.title}" class="w-full h-56 object-cover cursor-pointer" onclick="navigate('property', '${property.id}')">
+                <button onclick="toggleFavorite('${property.id}')" class="absolute top-4 right-4 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition">
+                    <i class="fas fa-heart ${isFavorite ? 'text-red-500' : 'text-gray-300'}"></i>
+                </button>
+                <div class="absolute bottom-4 left-4 bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                    ${property.type.charAt(0).toUpperCase() + property.type.slice(1)}
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="text-2xl font-bold text-gray-900 mb-1">$${property.price.toLocaleString()}</div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2 cursor-pointer hover:text-blue-600" onclick="navigate('property', '${property.id}')">${property.title}</h3>
+                <p class="text-gray-500 text-sm mb-4"><i class="fas fa-map-marker-alt mr-1"></i>${property.address}, ${property.city}, ${property.state}</p>
+                <div class="flex items-center justify-between text-gray-600 text-sm border-t pt-4">
+                    <span><i class="fas fa-bed mr-1"></i>${property.bedrooms} Beds</span>
+                    <span><i class="fas fa-bath mr-1"></i>${property.bathrooms} Baths</span>
+                    <span><i class="fas fa-ruler-combined mr-1"></i>${property.sqft.toLocaleString()} sqft</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderListings() {
+    let filtered = [...PROPERTIES];
+    const { location, bedrooms, minPrice } = appState.filters;
+    const sortBy = document.getElementById('sortBy')?.value || 'default';
+    
+    if (location !== 'all') {
+        filtered = filtered.filter(p => `${p.city}, ${p.state}` === location);
+    }
+    if (bedrooms !== 'all') {
+        filtered = filtered.filter(p => p.bedrooms >= parseInt(bedrooms));
+    }
+    if (minPrice > 0) {
+        filtered = filtered.filter(p => p.price >= minPrice);
+    }
+    
+    if (sortBy === 'price-low') filtered.sort((a, b) => a.price - b.price);
+    if (sortBy === 'price-high') filtered.sort((a, b) => b.price - a.price);
+    if (sortBy === 'beds') filtered.sort((a, b) => b.bedrooms - a.bedrooms);
+    if (sortBy === 'sqft') filtered.sort((a, b) => b.sqft - a.sqft);
+    
+    document.getElementById('propertyGrid').innerHTML = filtered.map(p => renderPropertyCard(p)).join('');
+    document.getElementById('listingCount').textContent = `Showing ${filtered.length} properties`;
+}
+
+function renderFeaturedProperties() {
+    const featured = PROPERTIES.slice(0, 3);
+    document.getElementById('featuredProperties').innerHTML = featured.map(p => renderPropertyCard(p)).join('');
+}
+
+function renderPropertyDetails(propertyId) {
+    const property = PROPERTIES.find(p => p.id === propertyId);
+    if (!property) return;
+    
+    const isFavorite = appState.favorites.includes(property.id);
+    
+    document.getElementById('propertyDetails').innerHTML = `
+        <div class="mb-6">
+            <button onclick="navigate('listings')" class="text-blue-600 hover:text-blue-700 font-medium">
+                <i class="fas fa-arrow-left mr-2"></i>Back to Listings
+            </button>
+        </div>
+        
+        <div class="grid lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+                <img src="${property.image}" alt="${property.title}" class="w-full h-96 object-cover rounded-2xl shadow-lg mb-6">
+                
+                <div class="bg-white rounded-2xl shadow-lg p-8 mb-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900 mb-2">${property.title}</h1>
+                            <p class="text-gray-500"><i class="fas fa-map-marker-alt mr-2"></i>${property.address}, ${property.city}, ${property.state} ${property.zip}</p>
+                        </div>
+                        <button onclick="toggleFavorite('${property.id}')" class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center hover:bg-gray-200 transition">
+                            <i class="fas fa-heart text-xl ${isFavorite ? 'text-red-500' : 'text-gray-400'}"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="text-4xl font-bold text-blue-600 mb-6">$${property.price.toLocaleString()}</div>
+                    
+                    <div class="grid grid-cols-4 gap-4 mb-8">
+                        <div class="text-center p-4 bg-gray-50 rounded-xl">
+                            <i class="fas fa-bed text-blue-600 text-xl mb-2"></i>
+                            <div class="font-bold text-gray-900">${property.bedrooms}</div>
+                            <div class="text-sm text-gray-500">Bedrooms</div>
+                        </div>
+                        <div class="text-center p-4 bg-gray-50 rounded-xl">
+                            <i class="fas fa-bath text-blue-600 text-xl mb-2"></i>
+                            <div class="font-bold text-gray-900">${property.bathrooms}</div>
+                            <div class="text-sm text-gray-500">Bathrooms</div>
+                        </div>
+                        <div class="text-center p-4 bg-gray-50 rounded-xl">
+                            <i class="fas fa-ruler-combined text-blue-600 text-xl mb-2"></i>
+                            <div class="font-bold text-gray-900">${property.sqft.toLocaleString()}</div>
+                            <div class="text-sm text-gray-500">Sq Ft</div>
+                        </div>
+                        <div class="text-center p-4 bg-gray-50 rounded-xl">
+                            <i class="fas fa-calendar text-blue-600 text-xl mb-2"></i>
+                            <div class="font-bold text-gray-900">${property.yearBuilt}</div>
+                            <div class="text-sm text-gray-500">Year Built</div>
+                        </div>
+                    </div>
+                    
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">About This Property</h2>
+                    <p class="text-gray-600 leading-relaxed mb-6">${property.description}</p>
+                    
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">Features</h2>
+                    <div class="flex flex-wrap gap-2">
+                        ${property.features.map(f => `<span class="bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-medium">${f}</span>`).join('')}
+                    </div>
+                </div>
+                
+                <!-- Map Placeholder -->
+                <div class="bg-white rounded-2xl shadow-lg p-8">
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">Location</h2>
+                    <div class="bg-gray-100 rounded-xl h-64 flex items-center justify-center">
+                        <div class="text-center text-gray-500">
+                            <i class="fas fa-map-marked-alt text-4xl mb-2"></i>
+                            <p>${property.address}, ${property.city}, ${property.state}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <div class="bg-white rounded-2xl shadow-lg p-6 sticky top-24">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">Interested in this property?</h3>
+                    
+                    <button onclick="navigate('ai-assistant')" class="w-full bg-gradient-to-r from-blue-600 to-emerald-600 text-white py-4 rounded-xl font-semibold mb-4 hover:opacity-90 transition">
+                        <i class="fas fa-robot mr-2"></i>Ask AI About This Property
+                    </button>
+                    
+                    <form onsubmit="submitPropertyInquiry(event, '${property.id}')" class="space-y-4">
+                        <input type="text" name="name" placeholder="Your Name" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                        <input type="email" name="email" placeholder="Email Address" required class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                        <input type="tel" name="phone" placeholder="Phone Number" class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
+                        <textarea name="message" rows="3" placeholder="I'm interested in this property..." class="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500"></textarea>
+                        <button type="submit" class="w-full bg-gray-900 text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition">
+                            Request Information
+                        </button>
+                    </form>
+                    
+                    <div class="mt-6 pt-6 border-t text-center text-sm text-gray-500">
+                        <i class="fas fa-shield-alt text-emerald-600 mr-1"></i>
+                        Your information is secure and never shared
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderFavorites() {
+    const favorites = PROPERTIES.filter(p => appState.favorites.includes(p.id));
+    
+    if (favorites.length === 0) {
+        document.getElementById('favoritesGrid').innerHTML = '';
+        document.getElementById('noFavorites').classList.remove('hidden');
+    } else {
+        document.getElementById('noFavorites').classList.add('hidden');
+        document.getElementById('favoritesGrid').innerHTML = favorites.map(p => renderPropertyCard(p, true)).join('');
+    }
+}
+
+// ==============================================
+// FAVORITES MANAGEMENT
+// ==============================================
+function toggleFavorite(propertyId) {
+    const index = appState.favorites.indexOf(propertyId);
+    if (index > -1) {
+        appState.favorites.splice(index, 1);
+    } else {
+        appState.favorites.push(propertyId);
+    }
+    localStorage.setItem('echoFavorites', JSON.stringify(appState.favorites));
+    updateFavCount();
+    
+    if (appState.currentPage === 'favorites') renderFavorites();
+    if (appState.currentPage === 'listings') renderListings();
+    if (appState.currentPage === 'home') renderFeaturedProperties();
+    if (appState.currentPage === 'property') renderPropertyDetails(appState.selectedProperty);
+}
+
+function updateFavCount() {
+    const count = appState.favorites.length;
+    const badge = document.getElementById('favCount');
+    if (count > 0) {
+        badge.textContent = count;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+// ==============================================
+// FILTERS
+// ==============================================
+function applyFilters() {
+    const location = document.getElementById('filterLocation').value;
+    const bedrooms = document.getElementById('filterBeds').value;
+    const minPrice = parseInt(document.getElementById('filterPrice').value);
+    
+    document.getElementById('priceDisplay').textContent = Math.round(minPrice / 1000);
+    
+    appState.filters = { location, bedrooms, minPrice };
+    renderListings();
+}
+
+function quickSearch() {
+    const location = document.getElementById('quickLocation').value;
+    const priceRange = document.getElementById('quickPrice').value;
+    const beds = document.getElementById('quickBeds').value;
+    
+    appState.filters.location = location;
+    appState.filters.bedrooms = beds;
+    
+    if (priceRange !== 'all') {
+        const [min, max] = priceRange.split('-').map(Number);
+        appState.filters.minPrice = min;
+    }
+    
+    navigate('listings');
+}
+
+function populateLocationDropdowns() {
+    const options = LOCATIONS.map(loc => `<option value="${loc}">${loc}</option>`).join('');
+    document.getElementById('quickLocation').innerHTML = `<option value="all">All Locations</option>${options}`;
+    document.getElementById('filterLocation').innerHTML = `<option value="all">All Locations</option>${options}`;
+}
+
+// ==============================================
+// AI CHAT FUNCTIONALITY
+// ==============================================
+function initChat() {
+    if (appState.chatHistory.length === 0) {
+        const greeting = AI_RESPONSES.greeting[Math.floor(Math.random() * AI_RESPONSES.greeting.length)];
+        addChatMessage('ai', greeting);
+    }
+    updateModeIndicator();
+}
+
+function addChatMessage(sender, message) {
+    appState.chatHistory.push({ sender, message, timestamp: new Date() });
+    renderChatMessages();
+}
+
+function renderChatMessages() {
+    const container = document.getElementById('chatMessages');
+    container.innerHTML = appState.chatHistory.map(msg => `
+        <div class="flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} fade-in">
+            <div class="${msg.sender === 'user' ? 'chat-bubble-user text-white' : 'chat-bubble-ai text-gray-800'} rounded-2xl px-5 py-3 max-w-md shadow-sm">
+                ${msg.message}
+            </div>
+        </div>
+    `).join('');
+    container.scrollTop = container.scrollHeight;
+    
+    if (appState.chatHistory.length > 0) {
+        document.getElementById('starterPrompts').classList.add('hidden');
+    }
+}
+
+function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const message = input.value.trim();
+    if (!message) return;
+    
+    addChatMessage('user', message);
+    input.value = '';
+    
+    // Show typing indicator
+    showTypingIndicator();
+    
+    // Get AI response
+    setTimeout(() => {
+        hideTypingIndicator();
+        const response = getAIResponse(message);
+        addChatMessage('ai', response);
+    }, 1000 + Math.random() * 1000);
+}
+
+function sendStarterPrompt(prompt) {
+    document.getElementById('chatInput').value = prompt;
+    sendMessage();
+}
+
+function showTypingIndicator() {
+    const container = document.getElementById('chatMessages');
+    container.innerHTML += `
+        <div id="typingIndicator" class="flex justify-start fade-in">
+            <div class="chat-bubble-ai rounded-2xl px-5 py-3 shadow-sm">
+                <div class="typing-indicator flex space-x-1">
+                    <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+                    <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+                    <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+                </div>
+            </div>
+        </div>
+    `;
+    container.scrollTop = container.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    const indicator = document.getElementById('typingIndicator');
+    if (indicator) indicator.remove();
+}
+
+function getAIResponse(userMessage) {
+    if (MODE === "demo") {
+        return getDemoResponse(userMessage);
+    } else {
+        return callAIModel(userMessage);
+    }
+}
+
+function getDemoResponse(message) {
+    const lowerMsg = message.toLowerCase();
+    
+    // Budget-related queries
+    if (lowerMsg.includes('budget') || lowerMsg.includes('$') || lowerMsg.includes('afford') || lowerMsg.includes('price')) {
+        if (lowerMsg.includes('500') || lowerMsg.includes('400') || lowerMsg.includes('300')) {
+            return AI_RESPONSES.budget_low + "\n\nI found 3 properties in your range: Our Atlanta Historic Bungalow at $375,000, Phoenix Desert Retreat at $395,000, and Nashville Music Row Loft at $425,000.";
+        } else if (lowerMsg.includes('600') || lowerMsg.includes('700') || lowerMsg.includes('550')) {
+            return AI_RESPONSES.budget_mid + "\n\nCheck out our Denver Mountain View Estate at $725,000 or the Charlotte Family Home at $545,000—both excellent values!";
+        } else {
+            return AI_RESPONSES.budget_high + "\n\nOur Miami Beachfront Condo at $890,000 and San Diego Coastal Gem at $985,000 are both exceptional properties.";
+        }
+    }
+    
+    // Family-related
+    if (lowerMsg.includes('family') || lowerMsg.includes('kid') || lowerMsg.includes('school') || lowerMsg.includes('children')) {
+        return AI_RESPONSES.family;
+    }
+    
+    // Investment
+    if (lowerMsg.includes('invest') || lowerMsg.includes('rental') || lowerMsg.includes('income')) {
+        return AI_RESPONSES.investment;
+    }
+    
+    // Urban/city living
+    if (lowerMsg.includes('urban') || lowerMsg.includes('city') || lowerMsg.includes('walkable') || lowerMsg.includes('downtown')) {
+        return AI_RESPONSES.urban;
+    }
+    
+    // Outdoor/nature
+    if (lowerMsg.includes('outdoor') || lowerMsg.includes('mountain') || lowerMsg.includes('beach') || lowerMsg.includes('nature') || lowerMsg.includes('hiking')) {
+        return AI_RESPONSES.outdoor;
+    }
+    
+    // Location specific
+    if (lowerMsg.includes('austin')) {
+        return "Austin is a fantastic choice! Known for its vibrant tech scene, live music, and outdoor lifestyle. Our Modern Austin Oasis at $485,000 features 3 bedrooms, a pool, and smart home technology. Would you like more details?";
+    }
+    if (lowerMsg.includes('denver')) {
+        return "Denver offers the perfect blend of urban amenities and outdoor adventure. Our Mountain View Estate at $725,000 has stunning Rockies views and quick access to world-class skiing. Shall I tell you more about the neighborhood?";
+    }
+    if (lowerMsg.includes('miami') || lowerMsg.includes('florida')) {
+        return "Miami Beach living is unmatched! Our Beachfront Condo at $890,000 offers direct ocean views, building amenities including pool and concierge, and a walkable lifestyle. Perfect for those seeking year-round sunshine.";
+    }
+    
+    // Thanks/closing
+    if (lowerMsg.includes('thank') || lowerMsg.includes('helpful') || lowerMsg.includes('great')) {
+        return AI_RESPONSES.closing;
+    }
+    
+    // Default response with property suggestions
+    return AI_RESPONSES.default + "\n\nBased on current market trends, I'd highlight our Austin, Denver, and Charlotte properties as excellent value opportunities. What matters most to you in a home—location, size, or specific amenities?";
+}
+
+async function callAIModel(userMessage) {
+    // Live mode - would call actual API
+    // This is a placeholder for real API integration
+    try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-3.5-turbo',
+                messages: [
+                    { role: 'system', content: 'You are Echo, an AI real estate assistant for EchoEstate. Help users find properties based on their needs. Be helpful, professional, and knowledgeable about real estate.' },
+                    { role: 'user', content: userMessage }
+                ]
+            })
+        });
+        const data = await response.json();
+        return data.choices[0].message.content;
+    } catch (error) {
+        return "I apologize, but I'm having trouble connecting right now. Please try again or switch to Demo mode for a seamless experience.";
+    }
+}
+
+function updateModeIndicator() {
+    const indicator = document.getElementById('modeIndicator');
+    if (MODE === "demo") {
+        indicator.innerHTML = `<span class="w-2 h-2 bg-emerald-500 rounded-full mr-2 pulse-dot"></span><span class="font-medium text-sm">Demo Mode ON</span>`;
+        indicator.className = "flex items-center bg-emerald-100 text-emerald-800 px-4 py-2 rounded-full";
+    } else {
+        indicator.innerHTML = `<span class="w-2 h-2 bg-blue-500 rounded-full mr-2 pulse-dot"></span><span class="font-medium text-sm">Live Mode</span>`;
+        indicator.className = "flex items-center bg-blue-100 text-blue-800 px-4 py-2 rounded-full";
+    }
+}
+
+// ==============================================
+// AUTHENTICATION
+// ==============================================
+function toggleAuthModal() {
+    document.getElementById('authModal').classList.toggle('hidden');
+}
+
+function toggleAuthForm() {
+    document.getElementById('loginForm').classList.toggle('hidden');
+    document.getElementById('registerForm').classList.toggle('hidden');
+    document.getElementById('authTitle').textContent = 
+        document.getElementById('loginForm').classList.contains('hidden') ? 'Create Account' : 'Welcome Back';
+}
+
+function handleLogin(e) {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    appState.user = {
+        email: formData.get('email'),
+        name: 'User'
+    };
+    localStorage.setItem('echoUser', JSON.stringify(appState.user));
+    updateAuthUI();
+    toggleAuthModal();
+}
+
+function handleRegister(e) {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    appState.user = {
+        email: formData.get('email'),
+        name: `${formData.get('firstName')} ${formData.get('lastName')}`,
+        userType: formData.get('userType')
+    };
+    localStorage.setItem('echoUser', JSON.stringify(appState.user));
+    updateAuthUI();
+    toggleAuthModal();
+}
+
+function demoLogin() {
+    appState.user = {
+        email: 'demo@echoestate.com',
+        name: 'Demo User',
+        userType: 'agent'
+    };
+    localStorage.setItem('echoUser', JSON.stringify(appState.user));
+    updateAuthUI();
+    toggleAuthModal();
+}
+
+function logout() {
+    appState.user = null;
+    localStorage.removeItem('echoUser');
+    updateAuthUI();
+}
+
+function updateAuthUI() {
+    const btn = document.getElementById('authBtn');
+    if (appState.user) {
+        btn.innerHTML = `<i class="fas fa-user mr-2"></i>${appState.user.name.split(' ')[0]}`;
+        btn.onclick = logout;
+    } else {
+        btn.innerHTML = 'Login';
+        btn.onclick = toggleAuthModal;
+    }
+}
+
+// ==============================================
+// FORMS
+// ==============================================
+function submitContactForm(e) {
+    e.preventDefault();
+    document.getElementById('contactForm').classList.add('hidden');
+    document.getElementById('contactSuccess').classList.remove('hidden');
+    
+    // In production, would send to backend
+    console.log('Contact form submitted');
+}
+
+function submitPropertyInquiry(e, propertyId) {
+    e.preventDefault();
+    alert('Thank you for your inquiry! An agent will contact you shortly.');
+    e.target.reset();
+    
+    // In production, would save to lead_inquiries table
+    console.log('Property inquiry submitted for:', propertyId);
+}
+
+// ==============================================
+// INITIALIZATION
+// ==============================================
+document.addEventListener('DOMContentLoaded', () => {
+    populateLocationDropdowns();
+    renderFeaturedProperties();
+    updateFavCount();
+    updateAuthUI();
+    
+    // Handle initial route
+    const hash = window.location.hash.slice(1) || 'home';
+    navigate(hash);
+    
+    // Handle back/forward navigation
+    window.addEventListener('hashchange', () => {
+        const page = window.location.hash.slice(1) || 'home';
+        navigate(page);
+    });
+});
+</script>
+
+</body>
+</html>
